@@ -33,9 +33,9 @@ def _rms_ref(x: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Tensor:
 @RMS_WEIGHT_REGISTER("flagos_rms_norm")
 class FlagOSRmsNormWeight(RMSWeightTemplate):
     def __init__(self, weight_name, create_cuda_buffer=False, create_cpu_buffer=False,
-                 lazy_load=False, lazy_load_file=None, is_post_adapter=False, eps=1e-6):
+                 lazy_load=False, lazy_load_file=None, is_post_adapter=False, eps=1e-6, **kwargs):
         super().__init__(weight_name, create_cuda_buffer, create_cpu_buffer,
-                         lazy_load, lazy_load_file, is_post_adapter, eps)
+                         lazy_load, lazy_load_file, is_post_adapter, eps, **kwargs)
 
     def apply(self, input_tensor):
         x = input_tensor.contiguous()
@@ -57,9 +57,9 @@ class FlagOSRmsNormWeight(RMSWeightTemplate):
 class FlagOSLayerNormWeight(LayerNormWeightTemplate):
     def __init__(self, weight_name=None, bias_name=None, create_cuda_buffer=False,
                  create_cpu_buffer=False, lazy_load=False, lazy_load_file=None,
-                 is_post_adapter=False, eps=1e-6):
+                 is_post_adapter=False, eps=1e-6, **kwargs):
         super().__init__(weight_name, bias_name, create_cuda_buffer, create_cpu_buffer,
-                         lazy_load, lazy_load_file, is_post_adapter, eps)
+                         lazy_load, lazy_load_file, is_post_adapter, eps,**kwargs)
 
     def apply(self, input_tensor):
         x = input_tensor.contiguous()
