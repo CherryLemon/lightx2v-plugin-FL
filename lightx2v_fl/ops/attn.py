@@ -15,39 +15,86 @@ import torch.nn.functional as F
 from lightx2v.utils.registry_factory import ATTN_WEIGHT_REGISTER
 from lightx2v_platform.ops.attn.template import AttnWeightTemplate
 
-# FlagGems exposes a fused attention entry; probe it lazily so import never fails.
-try:
-    import flag_gems
 
-    _GEMS_ATTN = getattr(getattr(flag_gems, "ops", None), "attention", None) or getattr(
-        flag_gems, "scaled_dot_product_attention", None
-    )
-except Exception:  # pragma: no cover
-    flag_gems = None
-    _GEMS_ATTN = None
+def _resolve_flaggems_attention():
+    """尝试多入口深度探测 FlagGems attention 算子"""
+    try:
+        import flag_gems
+    except Exception:
+        return None
+
+    attn_obj = getattr(getattr(flag_gems, "ops", None), "attention", None)
+
+    # 1. 如果 ops.attention 直接可调用
+    if callable(attn_obj):
+        return attn_obj
+
+    # 2. 如果 ops.attention 是个模块/对象，探测里面的具体函数名
+    if attn_obj is not None:
+        for name in (
+            "scaled_dot_product_attention",
+            "flash_attention_forward",
+            "flash_attn_varlen_func",
+        ):
+            fn = getattr(attn_obj, name, None)
+            if callable(fn):
+                return fn
+
+    # 3. 兼容老版本，直接在 flag_gems 根目录下找
+    fn = getattr(flag_gems, "scaled_dot_product_attention", None)
+    if callable(fn):
+        return fn
+
+    return None
+
+
+_GEMS_ATTN = _resolve_flaggems_attention()
+_ATTN_STATS = {"gems": 0, "fallback": 0}
 
 
 def _sdp(q4d: torch.Tensor, k4d: torch.Tensor, v4d: torch.Tensor) -> torch.Tensor:
-    """Scaled-dot-product attention on [1, L, H, D] inputs → [1, L, H, D].
-
-    Uses FlagGems' fused kernel when available, else torch SDPA (which wants
-    [B, H, L, D], so we permute around it).
-    """
+    """Scaled-dot-product attention on [1, L, H, D] inputs → [1, L, H, D]."""
+    
+    # --- 尝试使用 FlagGems 算子 ---
     if _GEMS_ATTN is not None:
         try:
-            # FlagGems' attention follows torch's [B, H, L, D] convention.
             q_t = q4d.permute(0, 2, 1, 3).contiguous()
             k_t = k4d.permute(0, 2, 1, 3).contiguous()
             v_t = v4d.permute(0, 2, 1, 3).contiguous()
+            
             out = _GEMS_ATTN(q_t, k_t, v_t)
+            
+            # 统计并打印前 20 次成功调用的日志
+            _ATTN_STATS["gems"] += 1
+            if _ATTN_STATS["gems"] <= 20:
+                print(
+                    "[flagos_attn_runtime] backend=FlagGems",
+                    "q=", tuple(q4d.shape),
+                    "k=", tuple(k4d.shape),
+                    "out=", tuple(out.shape),
+                    flush=True,
+                )
+                
             return out.permute(0, 2, 1, 3)
-        except Exception as exc:  # pragma: no cover - fall back on any kernel error
+        except Exception as exc:  # pragma: no cover
             warnings.warn(f"[flagos_flash_attn] FlagGems attention failed ({exc}); using torch SDPA.", stacklevel=2)
+
+    # --- Fallback: 使用 PyTorch 原生 SDPA ---
+    _ATTN_STATS["fallback"] += 1
+    if _ATTN_STATS["fallback"] <= 20:
+        print(
+            "[flagos_attn_runtime] backend=PyTorch (Fallback)",
+            "q=", tuple(q4d.shape),
+            "k=", tuple(k4d.shape),
+            flush=True,
+        )
 
     q_t = q4d.permute(0, 2, 1, 3).contiguous()
     k_t = k4d.permute(0, 2, 1, 3).contiguous()
     v_t = v4d.permute(0, 2, 1, 3).contiguous()
+    
     out = F.scaled_dot_product_attention(q_t, k_t, v_t)
+    
     return out.permute(0, 2, 1, 3)
 
 
