@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Copy LightX2V source
-# 注意：这个 Dockerfile 虽然放在 lightx2v-plugin-FL 里，
-# 但 build context 建议用上一级目录，这样才能同时 COPY LightX2V 和插件目录。
+# Note: although this Dockerfile lives in lightx2v-plugin-FL,
+# the recommended build context is the parent directory so both LightX2V and the plugin directory can be copied.
 COPY LightX2V /workspace/LightX2V
 
 WORKDIR /workspace/LightX2V
@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir -U peft
 RUN pip install --no-cache-dir sageattention
 
 # 4. Install FlagGems
-# 如果平台镜像里已经预装了定制版 flag_gems，可以 build 时传：
+# If the platform image already includes a customized flag_gems, pass this at build time:
 #   --build-arg INSTALL_FLAGGEMS=0
 ARG INSTALL_FLAGGEMS=1
 ARG FLAGGEMS_SPEC=flag_gems
@@ -48,8 +48,8 @@ RUN if [ "$INSTALL_FLAGGEMS" = "1" ]; then \
     fi
 
 # 5. Install FlagCX
-# FlagCX 通常没有简单的通用 pip wheel；官方方式是源码 pip install。
-# 如果 PPU 基础镜像已经带了 flagcx / torch flagcx backend，可以跳过。
+# FlagCX usually does not provide a simple universal pip wheel; the official method is pip install from source.
+# If the PPU base image already includes flagcx / the torch flagcx backend, this can be skipped.
 ARG INSTALL_FLAGCX=0
 ARG FLAGCX_REPO=https://github.com/flagos-ai/FlagCX.git
 ARG FLAGCX_REF=main
