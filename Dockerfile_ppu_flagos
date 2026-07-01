@@ -1,0 +1,95 @@
+# Dockerfile for LightX2V + lightx2v-plugin-FL on PPU-ZW810E / FlagOS
+# Based on ModelTC/LightX2V dockerfiles/platforms/Dockerfile_ppu
+
+FROM egslingjun-registry.cn-wulanchabu.cr.aliyuncs.com/egslingjun/inference-xpu-pytorch:26.04-v2.1.0-vllm0.19.0-torch2.10-cu130-20260508
+
+LABEL maintainer="LightX2V Contributors"
+LABEL description="LightX2V PPU image with FlagOS plugin, FlagGems and FlagCX"
+
+WORKDIR /workspace
+
+# 1. System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    build-essential \
+    cmake \
+    ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Copy LightX2V source
+# 注意：这个 Dockerfile 虽然放在 lightx2v-plugin-FL 里，
+# 但 build context 建议用上一级目录，这样才能同时 COPY LightX2V 和插件目录。
+COPY LightX2V /workspace/LightX2V
+
+WORKDIR /workspace/LightX2V
+
+# 3. Install LightX2V dependencies, but do not override torch stack from PPU base image
+RUN grep -vE '^(sgl-kernel|torch|torchvision|torchaudio)([<=>].*)?$' requirements.txt > /tmp/requirements.no-torch.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.no-torch.txt
+
+RUN pip install --no-cache-dir -e . --no-deps
+
+RUN pip install --no-cache-dir av
+RUN pip install --no-cache-dir -U peft
+RUN pip install --no-cache-dir sageattention
+
+# 4. Install FlagGems
+# 如果平台镜像里已经预装了定制版 flag_gems，可以 build 时传：
+#   --build-arg INSTALL_FLAGGEMS=0
+ARG INSTALL_FLAGGEMS=1
+ARG FLAGGEMS_SPEC=flag_gems
+RUN if [ "$INSTALL_FLAGGEMS" = "1" ]; then \
+        pip install --no-cache-dir "$FLAGGEMS_SPEC"; \
+    else \
+        echo "Skip installing flag_gems, use preinstalled vendor version."; \
+    fi
+
+# 5. Install FlagCX
+# FlagCX 通常没有简单的通用 pip wheel；官方方式是源码 pip install。
+# 如果 PPU 基础镜像已经带了 flagcx / torch flagcx backend，可以跳过。
+ARG INSTALL_FLAGCX=0
+ARG FLAGCX_REPO=https://github.com/flagos-ai/FlagCX.git
+ARG FLAGCX_REF=main
+RUN if [ "$INSTALL_FLAGCX" = "1" ]; then \
+        git clone --recursive --branch "$FLAGCX_REF" "$FLAGCX_REPO" /workspace/FlagCX && \
+        cd /workspace/FlagCX && \
+        pip install -v . --no-build-isolation; \
+    else \
+        echo "Skip installing FlagCX, use preinstalled vendor/backend version if available."; \
+    fi
+
+# 6. Copy and install lightx2v-plugin-FL
+COPY lightx2v-plugin-FL /workspace/lightx2v-plugin-FL
+
+WORKDIR /workspace/lightx2v-plugin-FL
+RUN pip install --no-cache-dir -e . --no-deps
+
+# 7. Basic import checks
+RUN python - <<'PY'
+import torch
+print("torch:", torch.__version__)
+
+try:
+    import flag_gems
+    print("flag_gems:", getattr(flag_gems, "__version__", "unknown"))
+    print("flag_gems.device:", getattr(flag_gems, "device", None))
+    print("flag_gems.vendor:", getattr(flag_gems, "vendor", None))
+except Exception as e:
+    print("flag_gems import failed:", repr(e))
+
+try:
+    import flagcx
+    print("flagcx import: OK")
+except Exception as e:
+    print("flagcx import failed:", repr(e))
+
+import lightx2v_fl
+print("lightx2v-plugin-FL import: OK")
+PY
+
+WORKDIR /workspace/LightX2V
+
+CMD ["python", "-c", "import lightx2v_fl; import lightx2v; print('LightX2V + FlagOS plugin ready!')"]
