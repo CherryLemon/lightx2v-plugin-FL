@@ -48,15 +48,15 @@ class FlagOSRope(RopeTemplate):
             cos = cos_sin_cache[..., :half].contiguous()
             sin = cos_sin_cache[..., half:].contiguous()
 
-        # --- 尝试使用 FlagGems 算子 ---
+        # --- Try the FlagGems operator ---
         if _GEMS_ROPE is not None and callable(_GEMS_ROPE):
             try:
-                # 【关键安全改动】仅在 FlagGems 内部进行特定维度的 squeeze
-                # 这样如果报错进入 fallback，外部的 cos/sin 依然保持原版布局 [S, 1, D/2]，防止 PyTorch 广播失败
+                # Key safety change: only squeeze specific dimensions inside FlagGems.
+                # This keeps the outer cos/sin in the original [S, 1, D/2] layout if fallback is needed, preventing PyTorch broadcast failures.
                 gems_cos = cos.squeeze(1).contiguous() if (cos.ndim == 3 and cos.shape[1] == 1) else cos
                 gems_sin = sin.squeeze(1).contiguous() if (sin.ndim == 3 and sin.shape[1] == 1) else sin
 
-                # 适配 FlagGems 的 [B, H, S, D] 布局 (这里 B=1)
+                # Adapt to FlagGems' [B, H, S, D] layout (B=1 here).
                 xq_bhsd = xq.permute(1, 0, 2).unsqueeze(0).contiguous()
                 xk_bhsd = xk.permute(1, 0, 2).unsqueeze(0).contiguous()
 
@@ -68,7 +68,7 @@ class FlagOSRope(RopeTemplate):
                     rotary_interleaved=True,
                 )
 
-                # 还原回 LightX2V 的 [S, H, D] 布局
+                # Restore LightX2V's [S, H, D] layout.
                 xq_o = xq_o.squeeze(0).permute(1, 0, 2).contiguous()
                 xk_o = xk_o.squeeze(0).permute(1, 0, 2).contiguous()
 
@@ -84,10 +84,10 @@ class FlagOSRope(RopeTemplate):
                 return xq_o.to(self.infer_dtype), xk_o.to(self.infer_dtype)
                 
             except Exception as exc:  # pragma: no cover
-                # 捕获运行期算子异常，打印警告，静默准备进入 Fallback
+                # Catch runtime operator exceptions, warn, and quietly prepare to enter fallback.
                 warnings.warn(f"[flagos_rope] FlagGems RoPE failed ({exc}); falling back to torch implementation.", stacklevel=2)
 
-        # --- Fallback: 使用原生的纯 PyTorch 实现 ---
+        # --- Fallback: use the native pure PyTorch implementation ---
         _ROPE_STATS["fallback"] += 1
         if _ROPE_STATS["fallback"] <= 5:
             print(

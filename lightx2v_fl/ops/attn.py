@@ -17,7 +17,7 @@ from lightx2v_platform.ops.attn.template import AttnWeightTemplate
 
 
 def _resolve_flaggems_attention():
-    """尝试多入口深度探测 FlagGems attention 算子"""
+    """Try multiple entry points to resolve the FlagGems attention operator."""
     try:
         import flag_gems
     except Exception:
@@ -25,11 +25,11 @@ def _resolve_flaggems_attention():
 
     attn_obj = getattr(getattr(flag_gems, "ops", None), "attention", None)
 
-    # 1. 如果 ops.attention 直接可调用
+    # 1. If ops.attention is directly callable.
     if callable(attn_obj):
         return attn_obj
 
-    # 2. 如果 ops.attention 是个模块/对象，探测里面的具体函数名
+    # 2. If ops.attention is a module/object, probe for concrete function names.
     if attn_obj is not None:
         for name in (
             "scaled_dot_product_attention",
@@ -40,7 +40,7 @@ def _resolve_flaggems_attention():
             if callable(fn):
                 return fn
 
-    # 3. 兼容老版本，直接在 flag_gems 根目录下找
+    # 3. For older versions, look directly under the flag_gems root.
     fn = getattr(flag_gems, "scaled_dot_product_attention", None)
     if callable(fn):
         return fn
@@ -55,7 +55,7 @@ _ATTN_STATS = {"gems": 0, "fallback": 0}
 def _sdp(q4d: torch.Tensor, k4d: torch.Tensor, v4d: torch.Tensor) -> torch.Tensor:
     """Scaled-dot-product attention on [1, L, H, D] inputs → [1, L, H, D]."""
     
-    # --- 尝试使用 FlagGems 算子 ---
+    # --- Try the FlagGems operator ---
     if _GEMS_ATTN is not None:
         try:
             q_t = q4d.permute(0, 2, 1, 3).contiguous()
@@ -64,7 +64,7 @@ def _sdp(q4d: torch.Tensor, k4d: torch.Tensor, v4d: torch.Tensor) -> torch.Tenso
             
             out = _GEMS_ATTN(q_t, k_t, v_t)
             
-            # 统计并打印前 20 次成功调用的日志
+            # Count and print logs for the first 20 successful calls.
             _ATTN_STATS["gems"] += 1
             if _ATTN_STATS["gems"] <= 20:
                 print(
@@ -79,7 +79,7 @@ def _sdp(q4d: torch.Tensor, k4d: torch.Tensor, v4d: torch.Tensor) -> torch.Tenso
         except Exception as exc:  # pragma: no cover
             warnings.warn(f"[flagos_flash_attn] FlagGems attention failed ({exc}); using torch SDPA.", stacklevel=2)
 
-    # --- Fallback: 使用 PyTorch 原生 SDPA ---
+    # --- Fallback: use PyTorch native SDPA ---
     _ATTN_STATS["fallback"] += 1
     if _ATTN_STATS["fallback"] <= 20:
         print(
