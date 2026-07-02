@@ -19,10 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Copy LightX2V source
-# Note: although this Dockerfile lives in lightx2v-plugin-FL,
-# the recommended build context is the parent directory so both LightX2V and the plugin directory can be copied.
-COPY LightX2V /workspace/LightX2V
+# 2. Clone LightX2V source and pin it to a known revision
+ARG LIGHTX2V_REPO=https://github.com/ModelTC/LightX2V.git
+ARG LIGHTX2V_REF=00c9da5ee7b2bfd7b13e79a367f2a23eaba04c8a
+RUN git clone --recursive "$LIGHTX2V_REPO" /workspace/LightX2V && \
+    cd /workspace/LightX2V && \
+    git reset --hard "$LIGHTX2V_REF" && \
+    git submodule update --init --recursive
 
 WORKDIR /workspace/LightX2V
 
@@ -62,7 +65,7 @@ RUN if [ "$INSTALL_FLAGCX" = "1" ]; then \
     fi
 
 # 6. Copy and install lightx2v-plugin-FL
-COPY lightx2v-plugin-FL /workspace/lightx2v-plugin-FL
+COPY . /workspace/lightx2v-plugin-FL
 
 WORKDIR /workspace/lightx2v-plugin-FL
 RUN pip install --no-cache-dir -e . --no-deps
