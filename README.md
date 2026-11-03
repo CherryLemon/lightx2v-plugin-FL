@@ -137,6 +137,52 @@ fall back to torch otherwise; per-chip kernel selection and numerical alignment
 (esp. fp8/int8 quant gemm) need validation on real hardware. See repo issues /
 roadmap.
 
+### MiniMax-H3 H100 VAE inference profile
+
+The optional `H3VAEGemsProfile` applies the validated H3 exclusions for one
+dedicated inference process. Outside the VAE decoder it keeps the H3 base
+registration. Inside the decoder it uses native linear/addmm and lower-level
+FlashAttention dispatch while retaining FlagGems for `decoder.proj_in`.
+The input projection must stay on that path to preserve the tested output.
+
+RMSNorm calls the same pinned FlagGems forward kernel directly, avoiding its
+unused Autograd wrapper. The shortcut rejects enabled gradients. The context
+serializes this runner's requests, requires ownership of global registration,
+and restores methods and registrations on exit or decode failure. It depends
+on a private FlagGems forward entry point and must be revalidated on upgrades.
+
+Construct the pipeline with `LIGHTX2V_FL_GLOBAL_GEMS=0`; the context then owns
+and actively enables global FlagGems dispatch for every inference request.
+Use an H3 config selecting `flagos_flash_attn` and `flagos_rms_norm`, with the
+required H3 AdaLN cache available. For example, in the configured H3 environment:
+
+```bash
+python examples/minimax_h3_h100_vae_profile.py \
+  --model-path /path/to/MiniMax-H3 \
+  --config /path/to/minimax_h3_flagos.json \
+  --output-dir ./results/h3-vae-profile \
+  --paired-control --validate-current
+```
+
+The output directory must be new. By default the example warms up each profile
+and interleaves three current/candidate measurements when `--paired-control`
+is selected. End-to-end timing includes media encoding. Optional validation
+adds current/candidate/current boundary snapshots outside measured requests;
+compare them on CPU outside any FlagGems context.
+
+Validation so far covers the pinned H100 BF16 T2AV workload only: 29 steps,
+124 frames, 512x320, seed 42, model CPU offload, FP16 video-VAE linears and FP32
+sensitive normalization. LightX2V `c58c16d6`, FlagGems `e3c77c06`, FlagTree
+`0.7.1.dev1`, Torch `2.11.0+cu130`, and Triton `3.6.0` were used.
+
+Three paired measurements reduced the current H3 global-ATen profile from
+30.206 to 29.799 seconds (1.35%). Video/audio VAE input and output boundaries
+were elementwise identical in the same-process A/B/A check. Three samples
+show drift; the difference from an older 31.304-second result is not all
+attributable to this change. Cross-process output differences remain
+unresolved. Other resolutions and Ulysses multi-GPU comparisons are ongoing;
+this profile does not claim validation for them.
+
 ## License
 
 Apache-2.0
