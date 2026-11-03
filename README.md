@@ -124,10 +124,74 @@ import time.
 > tables directly. The upstream hook fixes it properly by running plugin
 > registration *before* the merge.
 
+### Explicit operator dispatch
+
+RMSNorm, LayerNorm and dense attention calls now share a small dispatch entry
+point, `lightx2v_fl.dispatch.dispatch_op`. Their existing registry keys, tensor
+layouts and default order (`flaggems`, then `torch`) are preserved. Global ATen
+registration is separate: its lists do not control these explicit calls. A
+`torch` backend can still encounter globally patched ATen ops if you enabled them.
+RoPE and the linear/quantized-linear paths retain their current implementations.
+
+Use the weight template's normal `set_config(config)` / `config` entry point:
+
+```python
+weight.set_config({
+    "model_cls": "wan2.1",
+    "fl_dispatch": {
+        "rms_norm": {"order": ["torch"]},
+        "attention": {
+            "order": ["flaggems", "torch"],
+            "parameters": {"scale": 0.125, "is_causal": False}
+        }
+    }
+})
+```
+
+Policies are merged by field in this order: built-in defaults, detected FlagGems
+vendor, model `*` defaults, model/vendor defaults, user `fl_dispatch`. Each supplied
+`order` or `parameters` field replaces the entire earlier field; `{}` parameters
+clear inherited overrides. Parameters override the caller's defaults (for example
+the norm template's `eps`) and are forwarded unchanged to the selected backend.
+The shipped [`dispatch.json`](lightx2v_fl/configs/dispatch.json) has empty
+`platforms`/`models` maps, so successful default calls retain their behavior.
+Maintainers can add policies using this schema:
+
+```json
+{
+  "platforms": {"nvidia": {"rms_norm": {"order": ["flaggems", "torch"]}}},
+  "models": {"wan2.1": {"*": {"attention": {"parameters": {"scale": 0.125}}}}}
+}
+```
+
+Model keys match `config["model_cls"]` exactly; vendor names come from FlagGems.
+Unknown models/vendors add no defaults. Supported operators are `rms_norm`,
+`layer_norm`, and `attention`; backends are `flaggems` and `torch`. Norms accept
+policy parameter `eps`; attention accepts `scale`, `is_causal`, and `dropout_p`
+when the selected API supports them. Empty orders, duplicate/unknown
+backends, unknown fields/operators and unsupported parameter names are errors.
+
+Fallback happens **before execution** when an API is absent, its signature cannot
+be inspected/bound, or a known contract is unavailable (non-affine LayerNorm).
+Use an order containing only `flaggems` to require it; no supported implementation
+raises `NoImplementationError`. After a call starts, every error propagates,
+including `TypeError` and `NotImplementedError`; failed computations are never
+retried on another backend. This deliberately replaces the previous broad
+runtime-exception fallback. Legacy RMS signatures are recognized by signature
+binding, without trial execution. Dense attention uses only SDPA-compatible APIs;
+varlen-only and tuple-returning flash forward APIs are not substituted for SDPA.
+Successful calls keep their old layout adaptation and reference math. Hardware
+shape/dtype support and numerical behavior still require validation for the
+installed vendor build.
+
+Dispatch reads each weight's current configuration, so one weight's override
+does not mutate another's policy.
+
 ## Tests
 
 ```bash
-pytest -q        # CPU-only smoke tests: wiring + torch-fallback correctness
+pytest -q tests/test_dispatch.py tests/test_dispatch_callers.py  # isolated CPU contracts
+pytest -q tests/test_smoke.py  # requires the LightX2V host; CPU fallback smoke
 ```
 
 ## Status
