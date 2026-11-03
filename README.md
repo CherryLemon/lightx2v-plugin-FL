@@ -90,8 +90,49 @@ LIGHTX2V_FL_GLOBAL_GEMS=1 PLATFORM=flagos python lightx2v/infer.py ...
 |---|---|---|
 | `LIGHTX2V_FL_AUTO_REGISTER` | `1` | Register on `import lightx2v_fl`. |
 | `LIGHTX2V_FL_GLOBAL_GEMS` | `0` | `flag_gems.enable()` at aten level. |
-| `LIGHTX2V_FL_GEMS_UNUSED` | – | Comma-list of aten ops to exclude from global patch. |
+| `LIGHTX2V_FL_GEMS_WHITELIST` | – | Register only these ATen ops with `only_enable(include=...)`. |
+| `LIGHTX2V_FL_GEMS_BLACKLIST` | – | Replace platform/model exclusions. |
+| `LIGHTX2V_FL_GEMS_BLACKLIST_APPEND` | – | Append exclusions to the selected blacklist. |
+| `LIGHTX2V_FL_GEMS_UNUSED` | – | Legacy alias for `GEMS_BLACKLIST`. |
+| `LIGHTX2V_FL_GEMS_MODEL` | – | Exact model key for global ATen defaults. |
 | `LIGHTX2V_FL_DISABLE_FLAGCX` | `0` | Use vendor-native CCL instead of FlagCX. |
+
+### Global ATen selection rules
+
+These settings apply only when global patching is enabled. They do not control
+explicit weight-template calls such as `flagos_rms_norm`.
+
+The precedence follows vllm-plugin-FL: nonempty whitelist and blacklist values
+conflict. A whitelist replaces all default exclusions and ignores append. An
+explicit blacklist replaces both platform and model defaults. Otherwise the
+blacklist combines platform defaults, model defaults for `*`, then model defaults
+for the detected FlagGems vendor. Append extends the selected blacklist; duplicates
+are removed in first-seen order. `GEMS_UNUSED` retains its exclusion behavior as a
+legacy blacklist alias. Setting both it and `GEMS_BLACKLIST` to nonempty values is
+an error, including when their contents match. It also conflicts with a whitelist.
+
+An unset variable or `""` selects defaults. As in vllm-plugin-FL, selection uses the
+raw string: spaces or commas alone select an explicit empty list. Such a blacklist
+clears defaults; such a whitelist is passed to `only_enable(include=[])` and may
+be rejected by FlagGems. Names are stripped of surrounding whitespace and empty
+entries are dropped; `none` is an ordinary operator name, not a sentinel.
+Use the names accepted by the installed FlagGems build; name validation belongs
+to FlagGems.
+
+Maintainers can add exclusions to [`global_gems.json`](lightx2v_fl/configs/global_gems.json):
+`platforms` maps FlagGems vendor names to lists, while `models` maps exact model
+keys to `{ "*": [...], "nvidia": [...] }`. The shipped maps are empty, preserving
+the existing default of `enable(unused=None)`. Unknown vendors/models add no defaults.
+
+Set `LIGHTX2V_FL_GEMS_MODEL` before automatic registration. Alternatively, leave
+`LIGHTX2V_FL_GLOBAL_GEMS=0` and call
+`from lightx2v_fl.enable import enable_global_flaggems`, then
+`enable_global_flaggems(model_name="wan2.1")` after selecting the model. `vendor_name=` can be supplied explicitly; otherwise FlagGems identifies it.
+Global registration remains process-wide and idempotent: configure it before the
+first successful enable. Later calls do not reconfigure it. Missing FlagGems keeps
+its existing warning/fallback behavior; invalid configuration, unsupported whitelist
+APIs and registration errors propagate from an explicit enable call (automatic
+package registration retains its existing warning guard).
 
 ## Activation: how the plugin is discovered
 
