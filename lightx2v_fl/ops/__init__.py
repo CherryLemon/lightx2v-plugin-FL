@@ -29,8 +29,10 @@ def register_ops() -> None:
     # Importing each module runs its @*_REGISTER decorators against the final
     # lightx2v registries.
     from . import attn  # noqa: F401
+    from . import h3_norm  # noqa: F401
     from . import mm  # noqa: F401
     from . import norm  # noqa: F401
     from . import rope  # noqa: F401
+    from . import sage_attn  # noqa: F401
 
     logger.debug("[lightx2v-fl] flagos ops registered.")

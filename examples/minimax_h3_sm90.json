@@ -1,0 +1,33 @@
+{
+  "infer_steps": 29,
+  "num_frames": 124,
+  "size": [352, 640],
+  "fps": 24,
+  "enable_cfg": false,
+  "cpu_offload": false,
+  "offload_granularity": "model",
+  "use_adaln_cache": true,
+  "adaln_cache_dir": "./adaln-cache",
+  "text_encoder_load_on_init": false,
+  "text_encoder_cpu_offload": true,
+  "vae_cpu_offload": false,
+  "vae_decode_parallel": false,
+  "attn_type": "flagos_sage_attn",
+  "rms_type": "flagos_h3_rms_norm",
+  "rope_type": "minimax_h3_triton_rope",
+  "feature_caching": "NoCaching",
+  "use_compile": false,
+  "video_flow_shift": 12.0,
+  "audio_flow_shift": 3.0,
+  "vae_spatial_scale_factor": 16,
+  "fl_dispatch": {
+    "sage_attention": {
+      "order": ["flaggems"],
+      "parameters": {"pv_dtype": "fp8", "implementation": "sm90"}
+    },
+    "h3_rms_norm": {
+      "order": ["lightx2v_gems"],
+      "parameters": {"tier": "sm90"}
+    }
+  }
+}

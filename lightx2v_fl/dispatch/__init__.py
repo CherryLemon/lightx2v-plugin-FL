@@ -27,6 +27,8 @@ def dispatch_op(op_name, *args, torch_impl, config=None, **parameters):
     for backend in order:
         if backend == "flaggems":
             call = backends.flaggems_call(gems, op_name, args, parameters)
+        elif backend == "lightx2v_gems":
+            call = backends.lightx2v_call(op_name, args, parameters)
         else:
             call = backends.bind_call(torch_impl, args, parameters)
         if call is not None:

@@ -11,8 +11,24 @@ OPERATORS = {
     "rms_norm": frozenset({"eps"}),
     "layer_norm": frozenset({"eps"}),
     "attention": frozenset({"scale", "is_causal", "dropout_p"}),
+    "sage_attention": frozenset(
+        {
+            "sm_scale",
+            "is_causal",
+            "return_lse",
+            "pv_dtype",
+            "implementation",
+        }
+    ),
+    "h3_rms_norm": frozenset({"eps", "tier"}),
+    "h3_swiglu": frozenset({"tier"}),
+    "h3_vae_qk_norm_rope": frozenset({"eps", "tier"}),
+    "h3_vae_residual": frozenset({"tier"}),
+    "h3_vae_residual_norm": frozenset({"eps", "tier"}),
+    "h3_reference_blend": frozenset(),
+    "h3_rotary_tables": frozenset({"freq_dim", "theta"}),
 }
-BACKENDS = {"flaggems", "torch"}
+BACKENDS = {"flaggems", "lightx2v_gems", "torch"}
 
 
 @lru_cache(maxsize=1)
@@ -41,6 +57,10 @@ def resolve_policy(op_name, *, config=None, vendor_name="unknown"):
     if unknown:
         raise ValueError(f"Unknown fl_dispatch operators: {sorted(unknown)}")
     policy = {"order": ["flaggems", "torch"], "parameters": {}}
+    if op_name.startswith("h3_"):
+        policy["order"] = ["lightx2v_gems"]
+    elif op_name == "sage_attention":
+        policy["order"] = ["flaggems"]
     for layer in (
         defaults["platforms"].get(vendor_name, {}),
         model.get("*", {}),
