@@ -12,10 +12,9 @@ not load experimental source paths or patch installed numerical dependencies.
 
 Install the device-matched PyTorch and compiler first, then the reviewed/pinned
 FlagGems and FlagGems-lightx2v revisions. Install this plugin with `pip install
---no-deps .`. The complete [environment and reproduction guide](https://github.com/CherryLemon/FlagGems-lightx2v/blob/5473a1d/docs/reproduction.md)
-lists required image components, cache generation and device validation. The
-[optimization design](https://github.com/CherryLemon/FlagGems-lightx2v/blob/5473a1d/docs/optimization.md)
-describes numerical contracts and ownership.
+--no-deps .`. The public operator dependencies are pinned in
+`requirements-h3-operators.txt`. Install them with `python -m pip install
+--no-deps -r requirements-h3-operators.txt` after preparing the vendor stack.
 
 `examples/minimax_h3_sm90.json` is a single-H100, fully resident, fixed-conditioning
 configuration. Set its AdaLN cache directory to a cache generated with the same
@@ -55,19 +54,3 @@ H3 multi-card configurations use Ulysses **sequence** parallelism (not tensor
 parallelism). Configure the upstream `parallel.seq_p_size`, `seq_p_attn_type`
 and collective backend only after bounded communication tests. Keep VAE
 parallelism, offload, seed, frames, steps and timing boundaries explicit.
-
-## Review checkpoint and numerical acceptance
-
-The pinned draft operator revisions are in `requirements-h3-operators.txt`. Install
-with `python -m pip install --no-deps -r requirements-h3-operators.txt` after the
-vendor environment is prepared. These pins preserve review provenance.
-
-A packaged360p request passes the complete historical-native final video/audio
-latent comparison bitwise. The integration explicitly binds the runner policy
-to host-created Sage/RMS weights during the context, preserving per-weight
-overrides and restoring the original config objects on exit. This avoids silently
-using the BF16-PV default when the model requested SM90 FP8 PV.
-
-This is one fixed-conditioning request, not a repeated steady-state performance
-cohort. The complete resolution/Ulysses matrix has not been rerun after packaging;
-do not use historical pre-packaging throughput as acceptance of this head.

@@ -1,4 +1,4 @@
 # Install vendor-matched torch/compiler first. Use pip install --no-deps -r this file.
 # Draft review revisions; not a validated production release.
 flag_gems @ git+https://github.com/CherryLemon/FlagGems.git@3448d75deaacd9b673c071411b5766c82c1d4c2a
-flaggems-lightx2v @ git+https://github.com/CherryLemon/FlagGems-lightx2v.git@5473a1dd334d0625d538fc9738dbf00a962554b4
+flaggems-lightx2v @ git+https://github.com/CherryLemon/FlagGems-lightx2v.git@df5f394ec0b091df9059ef05bdd601815304495a
