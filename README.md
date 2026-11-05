@@ -121,7 +121,7 @@ to FlagGems.
 
 Maintainers can add exclusions to [`global_gems.json`](lightx2v_fl/configs/global_gems.json):
 `platforms` maps FlagGems vendor names to lists, while `models` maps exact model
-keys to `{ "*": [...], "nvidia": [...] }`. The shipped maps are empty, preserving
+keys to `{ "*": [...], "nvidia": [...] }`. The platform maps are empty; the NVIDIA MiniMax-H3 model policy excludes precision-sensitive or slower generic replacements, preserving
 the existing default of `enable(unused=None)`. Unknown vendors/models add no defaults.
 
 Set `LIGHTX2V_FL_GEMS_MODEL` before automatic registration. Alternatively, leave
@@ -181,3 +181,12 @@ roadmap.
 ## License
 
 Apache-2.0
+
+### MiniMax-H3 global operator policy
+
+Selecting `model_name="minimax_h3"` (or
+`LIGHTX2V_FL_GEMS_MODEL=minimax_h3`) on NVIDIA uses the packaged conservative
+exclusion list for H3. It leaves native GEMMs and sensitive arithmetic in place.
+Explicit whitelist/blacklist/append precedence is unchanged; this policy does
+not enable global registration, install H3 fusions or assert whole-model
+support on an untested chip. Non-NVIDIA vendors retain their existing defaults.

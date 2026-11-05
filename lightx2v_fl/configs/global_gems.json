@@ -1,4 +1,22 @@
 {
     "platforms": {},
-    "models": {}
+    "models": {
+        "minimax_h3": {
+            "nvidia": [
+                "mm",
+                "mm_out",
+                "rms_norm",
+                "conv1d",
+                "conv_transpose1d",
+                "index_select",
+                "mul",
+                "add",
+                "neg",
+                "cat",
+                "silu",
+                "to_copy",
+                "copy_"
+            ]
+        }
+    }
 }
